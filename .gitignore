@@ -1,0 +1,47 @@
+# Python / 环境
+prjenv/
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+.Python
+*.egg-info/
+dist/
+build/
+
+# IDE
+.idea/
+
+# 大模型权重（请用 Hugging Face / 网盘分发，勿提交 Git）
+models/
+qwen2.5-1.5B-MedVocab/
+*.safetensors
+*.bin
+*.pt
+*.pth
+
+# 训练产物
+outputs/
+runs/
+wandb/
+checkpoint-*/
+
+# 全量医疗数据（体积过大；保留 README 即可）
+medical/pretrain/
+medical/finetune/train_zh_0.json
+medical/finetune/train_en_1.json
+medical/finetune/test_en_1.json
+medical/finetune/valid_en_1.json
+medical/reward/
+
+# 抽样后的 jsonl（可选：若需共享可改用 Git LFS）
+data/*.jsonl
+
+# 保留清单与说明
+!data/sample_manifest.json
+!medical/README.md
+
+# 系统 / 临时
+.DS_Store
+*.log
+.cache/

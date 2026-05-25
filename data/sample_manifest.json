@@ -1,0 +1,35 @@
+{
+  "seed": 42,
+  "out_dir": "/root/lcx/nlp/NLP-Project/data",
+  "files": {
+    "sampled_pretrain.jsonl": {
+      "count": 38475,
+      "book_full": 8475,
+      "encyclopedia_sampled": 30000
+    },
+    "sampled_sft_train.jsonl": {
+      "count": 50000,
+      "source": "/root/lcx/nlp/NLP-Project/medical/finetune/train_zh_0.json"
+    },
+    "sampled_sft_valid.jsonl": {
+      "count": 500,
+      "copied_full": true
+    },
+    "sampled_sft_test.jsonl": {
+      "count": 500,
+      "copied_full": true
+    },
+    "sampled_reward_train.jsonl": {
+      "count": 3800,
+      "copied_full": true
+    },
+    "sampled_reward_valid.jsonl": {
+      "count": 100,
+      "copied_full": true
+    },
+    "sampled_reward_test.jsonl": {
+      "count": 100,
+      "copied_full": true
+    }
+  }
+}
