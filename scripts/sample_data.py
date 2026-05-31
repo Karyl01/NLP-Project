@@ -12,6 +12,9 @@
 用法（在项目根目录）:
   python scripts/sample_data.py
   python scripts/sample_data.py --pretrain_encyclopedia_n 20000 --sft_train_n 30000
+
+  # 组长实验：train_zh_0 顺序前 5 万条（非随机）
+  python scripts/sample_data.py --only_sft_head 50000 --skip_pretrain
 """
 from __future__ import annotations
 
@@ -47,6 +50,21 @@ def count_jsonl_lines(path: Path) -> int:
             if line.strip():
                 n += 1
     return n
+
+
+def head_sample_jsonl(path: Path, k: int) -> list[dict[str, Any]]:
+    """取 JSONL 文件最前面的 k 条（顺序、可复现）。"""
+    rows: list[dict[str, Any]] = []
+    for row in iter_jsonl(path):
+        rows.append(row)
+        if len(rows) >= k:
+            break
+    if len(rows) < k:
+        print(
+            f"  警告: {path.name} 仅 {len(rows)} 行，少于请求 {k} 条，将全部保留。",
+            file=sys.stderr,
+        )
+    return rows
 
 
 def reservoir_sample_jsonl(
@@ -118,6 +136,18 @@ def parse_args() -> argparse.Namespace:
         help="若已生成 SFT 子集可跳过",
     )
     p.add_argument(
+        "--only_sft_head",
+        type=int,
+        default=None,
+        metavar="N",
+        help="仅导出 train_zh_0 前 N 条到 sampled_sft_train_head{N}.jsonl（顺序取样）",
+    )
+    p.add_argument(
+        "--skip_reward",
+        action="store_true",
+        help="跳过 reward 复制",
+    )
+    p.add_argument(
         "--medical_dir",
         type=Path,
         default=medical,
@@ -155,6 +185,26 @@ def main() -> None:
 
     print(f"输出目录: {out_dir}")
     print(f"随机种子: {args.seed}\n")
+
+    if args.only_sft_head is not None:
+        n = args.only_sft_head
+        print(f"[SFT head] 从 train_zh_0 顺序取前 {n} 条 ...")
+        rows = head_sample_jsonl(paths["sft_train"], n)
+        out_head = out_dir / f"sampled_sft_train_head{n}.jsonl"
+        write_jsonl(out_head, rows)
+        manifest["files"][out_head.name] = {
+            "count": len(rows),
+            "source": str(paths["sft_train"]),
+            "head_sequential": True,
+            "head_n": n,
+        }
+        manifest_path = out_dir / "sample_manifest.json"
+        with manifest_path.open("w", encoding="utf-8") as f:
+            json.dump(manifest, f, ensure_ascii=False, indent=2)
+        print(f"  -> {out_head}  共 {len(rows)} 条")
+        print(f"清单: {manifest_path}")
+        print("\n完成。请用此文件跑 train_sft.py（见脚本顶部组长实验说明）。")
+        return
 
     # ----- Pretrain 子集 -----
     if not args.skip_pretrain:
@@ -212,16 +262,19 @@ def main() -> None:
         print("[2/3] 跳过 SFT\n")
 
     # ----- Reward（DPO）全量复制 -----
-    print("[3/3] 复制 reward 数据（体量小，全量）...")
-    for split, src_key, out_name in [
-        ("train", "reward_train", "sampled_reward_train.jsonl"),
-        ("valid", "reward_valid", "sampled_reward_valid.jsonl"),
-        ("test", "reward_test", "sampled_reward_test.jsonl"),
-    ]:
-        n = copy_jsonl(paths[src_key], out_dir / out_name)
-        manifest["files"][out_name] = {"count": n, "copied_full": True}
-        print(f"  -> {out_dir / out_name}  {n} 条")
-    print()
+    if args.skip_reward:
+        print("[3/3] 跳过 reward\n")
+    else:
+        print("[3/3] 复制 reward 数据（体量小，全量）...")
+        for split, src_key, out_name in [
+            ("train", "reward_train", "sampled_reward_train.jsonl"),
+            ("valid", "reward_valid", "sampled_reward_valid.jsonl"),
+            ("test", "reward_test", "sampled_reward_test.jsonl"),
+        ]:
+            n = copy_jsonl(paths[src_key], out_dir / out_name)
+            manifest["files"][out_name] = {"count": n, "copied_full": True}
+            print(f"  -> {out_dir / out_name}  {n} 条")
+        print()
 
     manifest_path = out_dir / "sample_manifest.json"
     with manifest_path.open("w", encoding="utf-8") as f:

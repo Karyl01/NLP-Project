@@ -15,6 +15,7 @@ build/
 # 大模型权重（请用 Hugging Face / 网盘分发，勿提交 Git）
 models/
 qwen2.5-1.5B-MedVocab/
+qwen2.5-1.5B-finetune-train-Medvocab/
 *.safetensors
 *.bin
 *.pt
@@ -41,7 +42,14 @@ data/*.jsonl
 !data/sample_manifest.json
 !medical/README.md
 
+# 评测产物（体积大、可本地重跑生成）
+results/
+match_eval*.json
+eval_token_summary.json
+final_judged_report.json
+
 # 系统 / 临时
 .DS_Store
 *.log
 .cache/
+.env

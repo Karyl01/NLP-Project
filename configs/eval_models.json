@@ -1,0 +1,57 @@
+{
+  "test_file": "data/sampled_sft_test.jsonl",
+  "max_samples": 100,
+  "sample_seed": 42,
+  "results_dir": "results",
+  "models": [
+    {
+      "id": "A_sft",
+      "label": "A | 原始Instruct + 仅SFT",
+      "base_model_path": "./models/qwen2.5-1.5B-Instruct",
+      "adapter_path": "./outputs/model_a/sft",
+      "output_field": "model_A_sft_output"
+    },
+    {
+      "id": "B_dapt",
+      "label": "B-pre | 原始Instruct + 仅pretrain",
+      "base_model_path": "./models/qwen2.5-1.5B-Instruct",
+      "adapter_path": "./outputs/model_b/stage1_dapt",
+      "output_field": "model_B_dapt_only_output"
+    },
+    {
+      "id": "B_sft",
+      "label": "B | 原始Instruct + pretrain + SFT",
+      "base_model_path": "./models/qwen2.5-1.5B-Instruct",
+      "adapter_path": "./outputs/model_b/stage2_sft",
+      "output_field": "model_B_sft_output"
+    },
+    {
+      "id": "C_pretrain",
+      "label": "C-pre | MedVocab + 仅pretrain",
+      "base_model_path": "./qwen2.5-1.5B-MedVocab",
+      "adapter_path": "./outputs/model_c/stage1_pretrain",
+      "output_field": "model_C_pretrain_only_output"
+    },
+    {
+      "id": "C_sft",
+      "label": "C | MedVocab + pretrain + SFT",
+      "base_model_path": "./qwen2.5-1.5B-MedVocab",
+      "adapter_path": "./outputs/model_c/stage2_sft",
+      "output_field": "model_C_sft_output"
+    },
+    {
+      "id": "C_sft_only",
+      "label": "C' | MedVocab + 仅SFT",
+      "base_model_path": "./qwen2.5-1.5B-MedVocab",
+      "adapter_path": "./outputs/model_c_sft_only/sft",
+      "output_field": "model_C_sft_only_output"
+    }
+  ],
+  "judge_pairs": [
+    ["C_sft", "A_sft"],
+    ["C_sft", "B_sft"],
+    ["C_sft_only", "A_sft"],
+    ["C_sft", "C_sft_only"],
+    ["C_pretrain", "B_dapt"]
+  ]
+}

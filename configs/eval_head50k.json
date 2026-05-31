@@ -1,0 +1,25 @@
+{
+  "test_file": "data/sampled_sft_test.jsonl",
+  "max_samples": 100,
+  "sample_seed": 42,
+  "results_dir": "results",
+  "models": [
+    {
+      "id": "instruct_head50k",
+      "label": "Instruct + SFT(train_zh_0前5万)",
+      "base_model_path": "./models/qwen2.5-1.5B-Instruct",
+      "adapter_path": "./outputs/instruct_head50k/sft",
+      "output_field": "model_instruct_head50k_output"
+    },
+    {
+      "id": "leader_head50k",
+      "label": "组长Medvocab + SFT(train_zh_0前5万)",
+      "base_model_path": "./qwen2.5-1.5B-finetune-train-Medvocab",
+      "adapter_path": "./outputs/leader_medvocab_head50k/sft",
+      "output_field": "model_leader_head50k_output"
+    }
+  ],
+  "judge_pairs": [
+    ["leader_head50k", "instruct_head50k"]
+  ]
+}

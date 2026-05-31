@@ -3,13 +3,14 @@
 第 3 步（阶段 2）：指令 SFT。A/B/C 三个对比模型共用同一套 SFT 数据（data/sampled_sft_train.jsonl）。
 
 用法示例:
-  # 模型 C：接 stage1 adapter
+  # 模型 C：接 stage1 adapter（重训 SFT 加 --fresh_lora）
   python scripts/train_sft.py \\
     --base_model_path ./qwen2.5-1.5B-MedVocab \\
     --adapter_path outputs/model_c/stage1_pretrain \\
     --train_file data/sampled_sft_train.jsonl \\
     --output_dir outputs/model_c/stage2_sft \\
-    --save_embeddings
+    --save_embeddings \\
+    --fresh_lora
 
   # 模型 A：原始 Qwen，仅 SFT
   python scripts/train_sft.py \\
@@ -17,12 +18,34 @@
     --train_file data/sampled_sft_train.jsonl \\
     --output_dir outputs/model_a/sft
 
-  # 模型 B：接 DAPT adapter，不加 --save_embeddings
+  # 模型 B：接 DAPT adapter（重训 SFT 时用 --fresh_lora 合并 stage1 后新建 r=64 LoRA）
   python scripts/train_sft.py \\
     --base_model_path ./models/qwen2.5-1.5B-Instruct \\
     --adapter_path outputs/model_b/stage1_dapt \\
     --train_file data/sampled_sft_train.jsonl \\
-    --output_dir outputs/model_b/stage2_sft
+    --output_dir outputs/model_b/stage2_sft \\
+    --fresh_lora
+
+  # 模型 C'：MedVocab 仅 SFT
+  python scripts/train_sft.py \\
+    --model_path ./qwen2.5-1.5B-MedVocab \\
+    --train_file data/sampled_sft_train.jsonl \\
+    --output_dir outputs/model_c_sft_only/sft \\
+    --save_embeddings
+
+  # ----- 组长实验：train_zh_0 前 5 万条（先 python scripts/sample_data.py --only_sft_head 50000 --skip_pretrain）-----
+  # 1) 原始 Instruct 底模 + LoRA SFT
+  CUDA_VISIBLE_DEVICES=0 python scripts/train_sft.py \\
+    --model_path ./models/qwen2.5-1.5B-Instruct \\
+    --train_file data/sampled_sft_train_head50000.jsonl \\
+    --output_dir outputs/instruct_head50k/sft
+
+  # 2) 组长全量模型 qwen2.5-1.5B-finetune-train-Medvocab + LoRA SFT
+  CUDA_VISIBLE_DEVICES=1 python scripts/train_sft.py \\
+    --model_path ./qwen2.5-1.5B-finetune-train-Medvocab \\
+    --train_file data/sampled_sft_train_head50000.jsonl \\
+    --output_dir outputs/leader_medvocab_head50k/sft \\
+    --save_embeddings
 """
 from __future__ import annotations
 
@@ -85,9 +108,15 @@ def parse_args():
     p.add_argument("--num_train_epochs", type=float, default=1.0)
     p.add_argument("--per_device_train_batch_size", type=int, default=2)
     p.add_argument("--gradient_accumulation_steps", type=int, default=8)
-    p.add_argument("--learning_rate", type=float, default=1e-4)
+    p.add_argument("--learning_rate", type=float, default=1e-5)
     p.add_argument("--max_seq_length", type=int, default=1024)
-    p.add_argument("--lora_r", type=int, default=16)
+    p.add_argument("--lora_r", type=int, default=64)
+    p.add_argument(
+        "--lora_alpha",
+        type=int,
+        default=None,
+        help="默认 2×lora_r（r=64 时为 128）",
+    )
     p.add_argument("--use_4bit", action="store_true")
     p.add_argument("--max_steps", type=int, default=-1)
     p.add_argument("--logging_steps", type=int, default=10)
@@ -112,7 +141,7 @@ def parse_args():
     p.add_argument(
         "--fresh_lora",
         action="store_true",
-        help="从 stage1 继续时重新套一层 LoRA（默认沿用 stage1 adapter 继续训）",
+        help="合并 stage1 adapter 到基座后新建 LoRA（重训 SFT 且 r 与 stage1 不同时必开）",
     )
     return p.parse_args()
 
@@ -142,21 +171,39 @@ def main():
         print(f"底模: {base}")
         model, tokenizer = load_model_for_continue(base, args.adapter_path, use_4bit=args.use_4bit)
         check_tokenizer_model_alignment(model, tokenizer)
+        if not args.fresh_lora:
+            print(
+                "提示: 未加 --fresh_lora 时将在 stage1 原 LoRA 上继续训（rank 与 stage1 一致）。"
+                "重训 SFT 且使用新 r 时请加上 --fresh_lora。"
+            )
         if args.fresh_lora:
-            # 合并后重新 LoRA 的场景较复杂，默认直接 train PeftModel
-            print("注意: --fresh_lora 未实现合并，仍在原 adapter 上继续训练。")
+            print(f"合并 stage1 adapter 后新建 LoRA: r={args.lora_r}, alpha={args.lora_alpha or args.lora_r * 2}")
+            model = model.merge_and_unload()
+            model = build_lora_model(
+                model,
+                save_embeddings=args.save_embeddings,
+                lora_r=args.lora_r,
+                lora_alpha=args.lora_alpha,
+            )
     else:
         if not args.model_path:
             raise ValueError("请指定 --model_path 或 --adapter_path")
         print(f"model_path: {args.model_path}")
         tokenizer = load_tokenizer(args.model_path)
         model = load_base_model(args.model_path, use_4bit=args.use_4bit)
-        model = build_lora_model(model, save_embeddings=args.save_embeddings, lora_r=args.lora_r)
+        model = build_lora_model(
+            model,
+            save_embeddings=args.save_embeddings,
+            lora_r=args.lora_r,
+            lora_alpha=args.lora_alpha,
+        )
         check_tokenizer_model_alignment(model, tokenizer)
 
     print_trainable_parameters(model)
-    print(f"train_file : {args.train_file}")
-    print(f"output_dir : {args.output_dir}")
+    print(f"train_file     : {args.train_file}")
+    print(f"output_dir     : {args.output_dir}")
+    print(f"learning_rate  : {args.learning_rate}")
+    print(f"lora_r/alpha   : {args.lora_r} / {args.lora_alpha or args.lora_r * 2}")
 
     dataset = jsonl_to_dataset(args.train_file)
     print(f"训练样本数: {len(dataset)}")

@@ -1,0 +1,25 @@
+{
+  "test_file": "data/sampled_sft_test.jsonl",
+  "max_samples": 100,
+  "sample_seed": 42,
+  "results_dir": "results",
+  "models": [
+    {
+      "id": "base_instruct",
+      "label": "底模 | 原始 Qwen2.5-1.5B-Instruct（无 LoRA）",
+      "base_model_path": "./models/qwen2.5-1.5B-Instruct",
+      "adapter_path": null,
+      "output_field": "model_base_instruct_output"
+    },
+    {
+      "id": "base_medvocab",
+      "label": "底模 | MedVocab（扩表后、无 LoRA）",
+      "base_model_path": "./qwen2.5-1.5B-MedVocab",
+      "adapter_path": null,
+      "output_field": "model_base_medvocab_output"
+    }
+  ],
+  "judge_pairs": [
+    ["base_medvocab", "base_instruct"]
+  ]
+}

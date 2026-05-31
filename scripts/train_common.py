@@ -77,8 +77,8 @@ def load_base_model(
 def build_lora_model(
     model,
     save_embeddings: bool = False,
-    lora_r: int = 16,
-    lora_alpha: int = 32,
+    lora_r: int = 64,
+    lora_alpha: int | None = None,
     lora_dropout: float = 0.05,
 ):
     """
@@ -97,6 +97,9 @@ def build_lora_model(
     modules_to_save = None
     if save_embeddings:
         modules_to_save = ["embed_tokens", "lm_head"]
+
+    if lora_alpha is None:
+        lora_alpha = lora_r * 2
 
     config = LoraConfig(
         r=lora_r,
